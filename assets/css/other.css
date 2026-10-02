@@ -1,0 +1,79 @@
+ /* ============================
+   STYLE DASHBOARD CUSTOM
+   ============================ */
+
+/* Judul antar section (Node 1, Node 2) */
+.section-title {
+    margin-top: 35px;
+    margin-bottom: 18px;
+    font-weight: 600;
+    font-size: 1.2rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* CARD CUSTOM */
+.custom-card {
+    border-radius: 12px;
+    overflow: hidden;
+    background: #ffffff;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    margin-bottom: 25px;
+}
+
+/* CARD HEADER */
+.custom-card-header {
+    padding: 12px 18px;
+    font-weight: 600;
+    font-size: 1.05rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: #fff;
+}
+
+/* WARNA HEADER KARTU */
+.bg-water {
+    background: linear-gradient(90deg, #0A66FF, #3B8BFF);
+}
+
+.bg-wind {
+    background: linear-gradient(90deg, #138A36, #18B04D);
+}
+
+/* AREA CANVAS GRAFIK */
+.chart-area {
+    height: 280px;
+    padding: 15px;
+}
+
+/* Responsif di HP */
+@media (max-width: 768px) {
+    .chart-area {
+        height: 230px;
+    }
+
+    .custom-card-header {
+        font-size: 0.95rem;
+        padding: 10px 14px;
+    }
+}
+
+/* PERBAIKI NAVBAR BIAR RAPI */
+.navbar {
+    padding: 10px 16px !important;
+}
+
+/* HILANGKAN GAP ANEH DI KANAN */
+.content-wrapper {
+    background: #f4f6f9;
+    padding-bottom: 30px;
+}
+
+/* TEKS HEADER TANGGAL */
+#tanggalSekarang {
+    font-size: 14px;
+    margin-left: 3px;
+    color: #666;
+}

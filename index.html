@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard Monitoring Danau Toba</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+    <!-- AdminLTE -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="assets/adminlte/dist/css/adminlte.min.css">
+
+    <!-- Leaflet -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        /* ==========================================================
+           DESIGN TOKENS
+           Palet diambil dari nuansa Danau Toba: air dalam yang gelap,
+           kabut pegunungan, dan aksen hangat ala tenun ulos untuk
+           status peringatan. Menggantikan gradasi ungu-biru generik.
+           ========================================================== */
+        :root {
+            --color-deep-lake: #0b2f4a;   /* biru tua air dalam */
+            --color-lake: #146b8c;        /* biru teal utama (brand) */
+            --color-lake-light: #1f8aad;
+            --color-highland: #1f8f6f;    /* hijau perbukitan (angin) */
+            --color-mist: #f4f8f9;        /* latar kartu, kabut pagi */
+            --color-mist-2: #e7f0f2;
+            --color-ulos: #b3502f;        /* aksen hangat (danger/CTA) */
+            --color-ulos-dark: #8f3f24;
+            --color-ink: #14232b;
+            --color-ink-soft: #4a5d66;
+            --color-border: #d9e4e7;
+
+            --header-h: 68px;
+            --footer-h-desktop: 78px;
+            --radius-md: 14px;
+            --radius-sm: 10px;
+            --shadow-card: 0 6px 18px rgba(11, 47, 74, 0.10);
+            --shadow-card-hover: 0 10px 26px rgba(11, 47, 74, 0.16);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html, body {
+            height: 100%;
+        }
+
+        body {
+            background: linear-gradient(180deg, var(--color-deep-lake) 0%, var(--color-lake) 100%);
+            color: var(--color-ink);
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* ==========================================================
+           SHELL — kerangka 1 layar penuh (desktop/tablet lanskap).
+           flex-column: header (auto) + workspace (1fr, mengisi sisa
+           tinggi) + footer (auto). overflow:hidden di level shell
+           mencegah scroll halaman; jika suatu panel kepanjangan,
+           scroll terjadi LOKAL di panel itu saja (lihat .sidebar,
+           .charts-grid), bukan mendorong layout ke bawah.
+           ========================================================== */
+        .dashboard-shell {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            height: 100dvh; /* browser modern: viewport dinamis (aman utk mobile) */
+            overflow: hidden;
+        }
+
+        /* ---------- TOPBAR ---------- */
+        .topbar {
+            flex: 0 0 var(--header-h);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 0 24px;
+            background: linear-gradient(90deg, var(--color-deep-lake) 0%, var(--color-lake) 100%);
+            box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+            z-index: 5;
+        }
+
+        .topbar-title { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
+
+        .topbar h1 {
+            font-size: clamp(1.05rem, 1.6vw, 1.4rem);
+            font-weight: 800;
+            color: #fff;
+            letter-spacing: 0.2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .topbar p {
+            font-size: 0.85rem;
+            color: #cfe6ee;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+
+        .topbar-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+
+        .live-pill {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(255,255,255,0.12);
+            border: 1px solid rgba(255,255,255,0.25);
+            color: #eafaf3;
+            padding: 6px 12px;
+            border-radius: 999px;
+            font-size: 0.78rem;
+            font-weight: 600;
+        }
+
+        .live-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: #34d399;
+            box-shadow: 0 0 0 rgba(52,211,153,0.6);
+            animation: livePulse 1.8s infinite;
+        }
+
+        @keyframes livePulse {
+            0% { box-shadow: 0 0 0 0 rgba(52,211,153,0.55); }
+            70% { box-shadow: 0 0 0 7px rgba(52,211,153,0); }
+            100% { box-shadow: 0 0 0 0 rgba(52,211,153,0); }
+        }
+
+        /* ---------- WORKSPACE (isi utama) ---------- */
+        .workspace {
+            flex: 1 1 auto;
+            min-height: 0; /* kunci flexbox agar child boleh scroll, bukan overflow diam-diam */
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 16px;
+            padding: 16px 20px;
+            overflow: hidden;
+        }
+
+        /* ---------- SIDEBAR ---------- */
+        .sidebar {
+            min-height: 0;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding-right: 4px;
+        }
+
+        .sidebar::-webkit-scrollbar { width: 6px; }
+        .sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.35); border-radius: 4px; }
+
+        .summary-card {
+            background: linear-gradient(135deg, #ffffff 0%, var(--color-mist) 100%);
+            border-radius: var(--radius-sm);
+            padding: 12px 14px;
+            box-shadow: var(--shadow-card);
+            border-left: 4px solid var(--color-lake);
+            flex-shrink: 0;
+            transition: box-shadow .25s ease, transform .25s ease;
+        }
+
+        .summary-card:hover { box-shadow: var(--shadow-card-hover); transform: translateY(-2px); }
+
+        .summary-card h3 {
+            font-size: 0.82rem;
+            font-weight: 700;
+            color: var(--color-lake);
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .summary-card p {
+            font-size: 0.83rem;
+            line-height: 1.55;
+            color: var(--color-ink-soft);
+            font-weight: 500;
+        }
+
+        .summary-card p strong { color: var(--color-ink); }
+
+        .filter-box {
+            background: linear-gradient(135deg, #ffffff 0%, var(--color-mist) 100%);
+            padding: 14px;
+            border-radius: var(--radius-sm);
+            box-shadow: var(--shadow-card);
+            flex-shrink: 0;
+        }
+
+        .filter-box label {
+            font-weight: 700;
+            color: var(--color-ink);
+            margin-bottom: 6px;
+            display: block;
+            font-size: 0.78rem;
+        }
+
+        .filter-box .form-control {
+            border-radius: 8px;
+            border: 2px solid var(--color-border);
+            padding: 8px 10px;
+            font-size: 0.85rem;
+        }
+
+        .filter-box .form-control:focus {
+            border-color: var(--color-lake);
+            box-shadow: 0 0 0 3px rgba(20,107,140,0.15);
+        }
+
+        .filter-actions { display: flex; gap: 8px; margin-top: 10px; }
+
+        .btn {
+            border-radius: 9px;
+            padding: 9px 14px;
+            font-weight: 700;
+            font-size: 0.83rem;
+            transition: all 0.2s ease;
+            border: none;
+            flex: 1;
+            text-align: center;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--color-lake) 0%, var(--color-deep-lake) 100%);
+            color: #fff;
+        }
+        .btn-primary:hover { filter: brightness(1.08); transform: translateY(-1px); }
+
+        .btn-success {
+            background: linear-gradient(135deg, var(--color-highland) 0%, #146a52 100%);
+            color: #fff;
+        }
+        .btn-success:hover { filter: brightness(1.08); transform: translateY(-1px); }
+
+        .status-card {
+            background: linear-gradient(135deg, #fff4ec 0%, #fde6d5 100%);
+            border-radius: var(--radius-sm);
+            padding: 12px 14px;
+            box-shadow: var(--shadow-card);
+            border: 2px solid #f0b78e;
+            flex-shrink: 0;
+        }
+
+        .status-card h6 {
+            font-size: 0.8rem;
+            font-weight: 800;
+            color: var(--color-ulos-dark);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+
+        .status-card table { width: 100%; font-size: 0.78rem; border-collapse: collapse; }
+
+        .status-card table td {
+            padding: 4px 8px;
+            border: 1px solid #f0c19f;
+            background: #fffaf5;
+            color: #7a3d1e;
+            font-weight: 600;
+        }
+
+        .status-card table td:last-child { text-align: right; }
+
+        /* ---------- MAIN PANEL (peta + grafik) ---------- */
+        .main-panel {
+            min-height: 0;
+            display: grid;
+            grid-template-rows: minmax(150px, 30%) 1fr;
+            gap: 14px;
+            overflow: hidden;
+        }
+
+        .panel-block { min-height: 0; display: flex; flex-direction: column; }
+
+        .panel-label {
+            font-size: 0.72rem;
+            font-weight: 800;
+            color: #eaf6fb;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            margin-bottom: 6px;
+            padding-left: 2px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+
+        #mapid {
+            width: 100%;
+            flex: 1 1 auto;
+            min-height: 0;
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-card);
+            border: 3px solid #ffffff;
+        }
+
+        .charts-grid {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-auto-rows: 1fr;
+            gap: 12px;
+            padding-right: 2px;
+        }
+
+        .charts-grid::-webkit-scrollbar { width: 6px; }
+        .charts-grid::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.35); border-radius: 4px; }
+
+        .custom-card {
+            border-radius: var(--radius-sm);
+            box-shadow: var(--shadow-card);
+            overflow: hidden;
+            background: #ffffff;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        .custom-card-header {
+            padding: 8px 12px;
+            font-weight: 700;
+            font-size: 0.8rem;
+            color: #fff;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .custom-card-header small { font-size: 0.68rem; opacity: 0.9; font-weight: 600; }
+
+        .bg-water { background: linear-gradient(135deg, var(--color-lake-light) 0%, var(--color-lake) 100%); }
+        .bg-wind  { background: linear-gradient(135deg, #34b389 0%, var(--color-highland) 100%); }
+
+        .chart-area {
+            flex: 1 1 auto;
+            min-height: 0;
+            position: relative;
+            padding: 8px;
+            background: #fbfdfd;
+        }
+
+        .chart-area canvas {
+            position: absolute;
+            inset: 8px;
+            width: calc(100% - 16px) !important;
+            height: calc(100% - 16px) !important;
+        }
+
+        /* ---------- FOOTER (versi ringkas 1-baris untuk desktop) ---------- */
+        .bottombar {
+            flex: 0 0 var(--footer-h-desktop);
+            background: linear-gradient(90deg, #0f172a 0%, #1e293b 100%);
+            color: #fff;
+            padding: 0 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            box-shadow: 0 -6px 16px rgba(0,0,0,0.25);
+        }
+
+        .footer-brand { display: flex; flex-direction: column; line-height: 1.25; flex-shrink: 0; }
+        .footer-brand strong { font-size: 0.85rem; font-weight: 800; }
+        .footer-brand span { font-size: 0.68rem; color: #93c5fd; }
+
+        .footer-team-inline {
+            display: flex;
+            gap: 14px;
+            overflow-x: auto;
+            flex: 1 1 auto;
+            justify-content: center;
+        }
+
+        .team-chip {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 999px;
+            padding: 4px 12px 4px 4px;
+            flex-shrink: 0;
+        }
+
+        .team-chip img {
+            width: 30px; height: 30px;
+            object-fit: cover;
+            border-radius: 50%;
+            border: 2px solid var(--color-lake-light);
+        }
+
+        .team-chip .tc-text { line-height: 1.15; }
+        .team-chip .tc-text strong { display: block; font-size: 0.72rem; font-weight: 700; }
+        .team-chip .tc-text span { display: block; font-size: 0.62rem; color: #93c5fd; }
+
+        .footer-meta { text-align: right; flex-shrink: 0; font-size: 0.68rem; color: #94a3b8; line-height: 1.4; }
+        .footer-meta i { color: #60a5fa; margin-right: 4px; }
+
+        /* ---------- MODAL ---------- */
+        #dataModal .modal-content { border-radius: 16px; border: none; box-shadow: 0 20px 50px rgba(0,0,0,0.3); }
+        #dataModal .modal-header {
+            background: linear-gradient(135deg, var(--color-lake) 0%, var(--color-deep-lake) 100%);
+            color: white; border-radius: 16px 16px 0 0; padding: 20px;
+        }
+        #dataModal .modal-title { font-weight: 700; font-size: 1.2rem; }
+        #dataModal table { font-size: 0.9rem; }
+        #dataModal thead { background: linear-gradient(135deg, var(--color-lake) 0%, var(--color-deep-lake) 100%); color: white; }
+        #dataModal thead th { padding: 12px; font-weight: 600; }
+
+        .loading { animation: pulse 1.5s ease-in-out infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+        /* ==========================================================
+           BREAKPOINT 1: TABLET LANSKAP / LAYAR KECIL (≤1200px)
+           Grafik jadi 2 kolom supaya tetap terbaca, layout tetap 1 layar.
+           ========================================================== */
+        @media (max-width: 1200px) {
+            .workspace { grid-template-columns: 260px 1fr; }
+            .charts-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        /* ==========================================================
+           BREAKPOINT 2: TABLET POTRAIT & MOBILE (≤992px)
+           Di layar sekecil ini, memaksa SEMUA (peta + 6 grafik + tim)
+           tampil tanpa scroll akan membuat teks & grafik tidak terbaca.
+           Maka mode "1 layar penuh" otomatis nonaktif dan halaman
+           kembali scroll normal, namun tetap rapi & mobile-first.
+           ========================================================== */
+        @media (max-width: 992px) {
+            .dashboard-shell { height: auto; overflow: visible; }
+            html, body { height: auto; overflow-y: auto; }
+
+            .workspace {
+                grid-template-columns: 1fr;
+                overflow: visible;
+                padding: 14px;
+            }
+
+            .sidebar { overflow: visible; }
+
+            .main-panel {
+                grid-template-rows: 260px auto;
+                overflow: visible;
+            }
+
+            #mapid { height: 260px; }
+
+            .charts-grid {
+                grid-template-columns: 1fr;
+                overflow: visible;
+                grid-auto-rows: 220px;
+            }
+
+            .bottombar {
+                flex-direction: column;
+                height: auto;
+                padding: 20px 16px;
+                gap: 14px;
+            }
+
+            .footer-team-inline { flex-wrap: wrap; justify-content: center; }
+            .footer-meta { text-align: center; }
+
+            .topbar { padding: 0 14px; }
+            .topbar p { display: none; } /* tanggal disembunyikan di layar sempit, ruang terbatas */
+        }
+
+        @media (max-width: 480px) {
+            .status-card table { font-size: 0.7rem; }
+            .team-chip .tc-text span { display: none; }
+        }
+    </style>
+</head>
+
+<body class="hold-transition">
+
+<div class="dashboard-shell">
+
+    <!-- ================= TOPBAR ================= -->
+    <header class="topbar">
+        <div class="topbar-title">
+            <<h1>Monitoring Ketinggian Air Danau Toba</h1></center>
+            <p id="tanggalSekarang"></p>
+        </div>
+        <div class="topbar-actions">
+            <span class="live-pill"><span class="live-dot"></span> Live</span>
+        </div>
+    </header>
+
+    <!-- ================= WORKSPACE ================= -->
+    <main class="workspace">
+
+        <!-- ---------- SIDEBAR ---------- -->
+        <aside class="sidebar">
+
+            <div class="summary-card" id="cardNode1">
+                <h3>📍 Node 1</h3>
+                <p id="node1Info" class="loading">Memuat data...</p>
+            </div>
+
+            <div class="summary-card" id="cardNode2">
+                <h3>📍 Node 2</h3>
+                <p id="node2Info" class="loading">Memuat data...</p>
+            </div>
+
+            <div class="summary-card" id="cardReceiver">
+                <h3>📡 Receiver</h3>
+                <p id="receiverInfo" class="loading">Memuat data...</p>
+            </div>
+
+            <div class="filter-box">
+                <label for="filterDate">📅 Pilih Tanggal</label>
+                <input type="date" id="filterDate" class="form-control">
+                <div class="filter-actions">
+                    <button class="btn btn-primary" id="btnTampil">🔍 Tampilkan</button>
+                    <a href="download_data.php" class="btn btn-success" id="btnDownload">⬇️ Unduh</a>
+                </div>
+            </div>
+
+            <div class="status-card">
+                <h6>⚠️ Status Ketinggian Air</h6>
+                <table>
+                    <tr><td>≤ 27 cm</td><td>Rendah</td></tr>
+                    <tr><td>28–54 cm</td><td>Normal</td></tr>
+                    <tr><td>55–81 cm</td><td>Siaga</td></tr>
+                    <tr><td>82–108 cm</td><td>Waspada</td></tr>
+                    <tr><td>&gt; 108 cm</td><td>Bahaya</td></tr>
+                </table>
+            </div>
+        </aside>
+
+        <!-- ---------- MAIN PANEL: PETA + GRAFIK ---------- -->
+        <section class="main-panel">
+
+            <div class="panel-block">
+                <span class="panel-label">🌍 Lokasi Sensor</span>
+                <div id="mapid"></div>
+            </div>
+
+            <div class="panel-block">
+                <span class="panel-label">📊 Grafik Real-time (MDPL, Ketinggian Air &amp; Kecepatan Angin)</span>
+                <div class="charts-grid">
+
+                    <div class="custom-card">
+                        <div class="custom-card-header bg-water"><span>MDPL Node 1</span><small>meter</small></div>
+                        <div class="chart-area"><canvas id="chartMDPL1"></canvas></div>
+                    </div>
+
+                    <div class="custom-card">
+                        <div class="custom-card-header bg-water"><span>MDPL Node 2</span><small>meter</small></div>
+                        <div class="chart-area"><canvas id="chartMDPL2"></canvas></div>
+                    </div>
+
+                    <div class="custom-card">
+                        <div class="custom-card-header bg-water"><span>Ketinggian Air N1</span><small>cm</small></div>
+                        <div class="chart-area"><canvas id="chartKetinggian1"></canvas></div>
+                    </div>
+
+                    <div class="custom-card">
+                        <div class="custom-card-header bg-wind"><span>Kecepatan Angin N1</span><small>m/s</small></div>
+                        <div class="chart-area"><canvas id="chartAngin1"></canvas></div>
+                    </div>
+
+                    <div class="custom-card">
+                        <div class="custom-card-header bg-water"><span>Ketinggian Air N2</span><small>cm</small></div>
+                        <div class="chart-area"><canvas id="chartKetinggian2"></canvas></div>
+                    </div>
+
+                    <div class="custom-card">
+                        <div class="custom-card-header bg-wind"><span>Kecepatan Angin N2</span><small>m/s</small></div>
+                        <div class="chart-area"><canvas id="chartAngin2"></canvas></div>
+                    </div>
+
+                </div>
+            </div>
+
+        </section>
+    </main>
+
+    <!-- ================= FOOTER RINGKAS ================= -->
+    <footer class="bottombar">
+        <div class="footer-brand">
+            <strong>Monitoring Danau Toba</strong>
+            <span>Kelompok 15 · Teknologi Komputer, IT Del</span>
+        </div>
+
+        <div class="footer-team-inline">
+            <div class="team-chip">
+                <img src="assets/icons/rejeki.jpg" alt="Rejeki">
+                <div class="tc-text"><strong>Rejeki A. P. L. Batu</strong><span>IoT &amp; Backend</span></div>
+            </div>
+            <div class="team-chip">
+                <img src="assets/icons/rahel.jpg" alt="Rahel">
+                <div class="tc-text"><strong>Rahel Napitupuluh</strong><span>UI/UX &amp; Dokumentasi</span></div>
+            </div>
+            <div class="team-chip">
+                <img src="assets/icons/arga.jpg" alt="Arga">
+                <div class="tc-text"><strong>Arga Nainggolan</strong><span>Hardware &amp; Sensor</span></div>
+            </div>
+        </div>
+
+        <div class="footer-meta">
+            <p><i class="fas fa-map-marker-alt"></i>Danau Toba, Sumatera Utara</p>
+            <p>© 2026 Kelompok 15</p>
+        </div>
+    </footer>
+</div>
+
+<!-- ================= MODAL DATA ================= -->
+<div class="modal fade" id="dataModal">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalTitle"></h5>
+                <button class="close" data-dismiss="modal" style="color:#fff;opacity:.85;background:none;border:none;font-size:1.4rem;">&times;</button>
+            </div>
+            <div class="modal-body">
+                <table class="table table-bordered table-striped">
+                    <thead>
+                        <tr><th>Time</th><th>Data Sensor</th></tr>
+                    </thead>
+                    <tbody id="modalTable"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ================= SCRIPTS ================= -->
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="assets/adminlte/dist/js/adminlte.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="assets/js/chart.js"></script>
+<script src="assets/js/map.js"></script>
+<!-- assets/js/app.js SENGAJA TIDAK DIMUAT LAGI: isinya duplikat dari chart.js
+     (fetch data_api.php & update chart yang sama), dan memanggil updateChart()
+     / chartK1 dari scope global padahal variabel itu private di dalam
+     DOMContentLoaded closure milik chart.js -> penyebab
+     "ReferenceError: updateChart is not defined". Fitur safe-fallback (anti
+     crash saat data null/kosong) dari app.js sudah digabung ke dalam chart.js
+     di bawah. File assets/js/app.js boleh dihapus dari server. -->
+
+<script>
+    // Tanggal Sekarang
+    document.getElementById("tanggalSekarang").innerHTML =
+        new Date().toLocaleDateString("id-ID", {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+            year: "numeric"
+        });
+
+    // Load Data Summary
+    fetch("data_api.php")
+        .then(res => res.json())
+        .then(data => {
+            if (!data.summary) {
+                console.warn("Summary tidak ditemukan di API");
+                return;
+            }
+
+            const air1 = Math.round(data.summary.node1.air);
+            const wind1 = Math.round(data.summary.node1.wind);
+            document.getElementById("node1Info").innerHTML =
+                `<strong>Air:</strong> ${air1} cm &nbsp;|&nbsp; <strong>Angin:</strong> ${wind1} m/s<br>
+                 <strong>Status:</strong> ${data.summary.node1.icon} ${data.summary.node1.status}`;
+            document.getElementById("node1Info").classList.remove("loading");
+
+            const air2 = Math.round(data.summary.node2.air);
+            const wind2 = Math.round(data.summary.node2.wind);
+            document.getElementById("node2Info").innerHTML =
+                `<strong>Air:</strong> ${air2} cm &nbsp;|&nbsp; <strong>Angin:</strong> ${wind2} m/s<br>
+                 <strong>Status:</strong> ${data.summary.node2.icon} ${data.summary.node2.status}`;
+            document.getElementById("node2Info").classList.remove("loading");
+
+            if (data.summary.receiver.last_time) {
+                const t = new Date(data.summary.receiver.last_time);
+                document.getElementById("receiverInfo").innerHTML =
+                    `<strong>Data terakhir:</strong><br>${t.toLocaleString("id-ID", {
+                        day: "2-digit", month: "long", year: "numeric",
+                        hour: "2-digit", minute: "2-digit", second: "2-digit"
+                    })}`;
+            } else {
+                document.getElementById("receiverInfo").innerHTML = "Data belum tersedia";
+            }
+            document.getElementById("receiverInfo").classList.remove("loading");
+        })
+        .catch(err => {
+            console.error("Error loading data:", err);
+            document.getElementById("node1Info").innerHTML = "⚠️ Gagal memuat data";
+            document.getElementById("node2Info").innerHTML = "⚠️ Gagal memuat data";
+            document.getElementById("receiverInfo").innerHTML = "⚠️ Gagal memuat data";
+        });
+
+    // Filter Tanggal
+    document.getElementById("btnTampil").addEventListener("click", function () {
+        let tanggal = document.getElementById("filterDate").value;
+        if (!tanggal) {
+            alert("⚠️ Pilih tanggal terlebih dahulu!");
+            return;
+        }
+        fetch("data_api.php?date=" + tanggal)
+            .then(res => res.json())
+            .then(data => {
+                if (typeof updateCharts === 'function') {
+                    updateCharts(data);
+                } else {
+                    console.warn("Function updateCharts tidak ditemukan");
+                }
+            })
+            .catch(err => {
+                console.error("Error:", err);
+                alert("❌ Gagal memuat data untuk tanggal tersebut");
+            });
+    });
+
+    // ---------------------------------------------------------------
+    // PENTING — INTEGRASI LEAFLET & CHART.JS DENGAN LAYOUT "1 LAYAR"
+    // ---------------------------------------------------------------
+    // Karena tinggi #mapid dan setiap canvas grafik sekarang mengikuti
+    // sisa ruang layar (bukan angka tetap seperti sebelumnya), 2 hal
+    // wajib dipastikan di assets/js/map.js dan assets/js/chart.js:
+    //
+    // 1) map.js — setelah membuat instance Leaflet, expose ke window
+    //    agar ukurannya bisa disegarkan saat layout berubah:
+    //       const map = L.map('mapid').setView([...], zoom);
+    //       window.leafletMap = map;   // <-- tambahkan baris ini
+    //
+    // 2) chart.js — setiap chart WAJIB dibuat dengan opsi:
+    //       options: { responsive: true, maintainAspectRatio: false }
+    //    Tanpa maintainAspectRatio:false, Chart.js akan memaksa rasio
+    //    tetap dan bisa meluber keluar dari .chart-area.
+    //
+    // Kode di bawah ini menyegarkan ukuran peta setiap kali kontainer
+    // berubah ukuran (mis. saat resize window atau ganti breakpoint).
+    if (window.ResizeObserver) {
+        const mapContainer = document.getElementById('mapid');
+        const roMap = new ResizeObserver(() => {
+            if (window.leafletMap && typeof window.leafletMap.invalidateSize === 'function') {
+                window.leafletMap.invalidateSize();
+            }
+        });
+        roMap.observe(mapContainer);
+    } else {
+        window.addEventListener('resize', () => {
+            if (window.leafletMap && typeof window.leafletMap.invalidateSize === 'function') {
+                window.leafletMap.invalidateSize();
+            }
+        });
+    }
+</script>
+
+</body>
+</html>

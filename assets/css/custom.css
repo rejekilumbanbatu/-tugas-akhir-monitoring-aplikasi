@@ -1,0 +1,62 @@
+ /* Jarak antar section (Node 1, Node 2) */
+.section-title {
+    margin-top: 35px;
+    margin-bottom: 18px;
+    font-weight: 600;
+    font-size: 1.2rem;
+    display: flex;
+    align-items: center;
+}
+
+/* Card */
+.custom-card {
+    border-radius: 12px;
+    overflow: hidden; /* agar header menyatu dengan card */
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    background: #fff;
+    margin-bottom: 25px;
+}
+
+/* Header card */
+.custom-card-header {
+    padding: 12px 18px;
+    font-weight: 600;
+    font-size: 1.05rem;
+    color: #fff;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* Warna header */
+.bg-water { 
+    background-color: #0A66FF; 
+}
+.bg-wind  { 
+    background-color: #138A36; 
+}
+
+/* Label real-time */
+.custom-card-header small {
+    color: #e9e9e9;
+    font-size: 12px;
+    margin-left: 5px;
+}
+
+/* Area grafik */
+.chart-area {
+    height: 270px;
+    padding: 15px;
+}
+
+/* Jarak antar kolom */
+.row > div {
+    margin-bottom: 20px;
+}
+
+/* Responsive — biar tetap rapi di HP */
+@media (max-width: 768px) {
+    .chart-area {
+        height: 220px;
+    }
+}
